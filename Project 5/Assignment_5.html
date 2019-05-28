@@ -13124,6 +13124,14 @@ div#notebook {
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
+<p>I have chosen to work with <a href="https://github.com/karthikvijayakumar/EVA/blob/master/Project%204/Assignment_4_4.ipynb">my code from Assignment 4</a> instead of code 8 from session 3 for this assignment</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
+</div><div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
 <h1 id="Import-Libraries-and-modules"><strong>Import Libraries and modules</strong><a class="anchor-link" href="#Import-Libraries-and-modules">&#182;</a></h1>
 </div>
 </div>
@@ -13602,6 +13610,13 @@ n/ADguINPyAowg8ERfiBoAg/EBThB4Ii/EBQhB8IivADQf0/sEWOix6VKakAAAAASUVORK5CYII=
 <div class="text_cell_render border-box-sizing rendered_html">
 <p>Image normalization</p>
 <p>We create an ImageDataGenerator object that learns the mean and variance of the training dataset. The generator object finally gives an iterator that can be used while fitting the model.</p>
+<p>We also create</p>
+<ol>
+<li>A test_iterator which can be used to run the model on the test images.</li>
+<li>A valid_iterator
+<br> The objective of this is 2 fold. First to serve as a the validation datset when training. Secondly to have a single dataset/object that retains order when later evaluating where our model makes errors. Iterator objects would shuffle the order of the images each time the iterator is created. It would be more convenient to have the whole validation/test images post normalization in a single object for use. Hence X_valid, Y_valid and y_valid are created.
+<br>y_valid contains numerical class labels just like y_test. This would be useful at a later point in the notebook.</li>
+</ol>
 
 </div>
 </div>
@@ -14211,7 +14226,7 @@ Epoch 00030: val_acc did not improve from 0.99050
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Computing the predicted classifications for the testing dataset. Using X_valid here instead of the test_iterator since test_iterator jumbles the order of the inputs and we need a consistent order to compute the confusion matrix and observe where the model is going wrong later on</p>
+<p>Computing the predicted classifications for the testing dataset. Using X_valid here instead of the test_iterator since test_iterator jumbles the order of the inputs and we need a consistent order to observe where the model is going wrong later on.</p>
 <p>Also computing the numeric classes from the categorical representation</p>
 
 </div>
