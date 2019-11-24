@@ -122,7 +122,7 @@ Changes implemented:
 5. Ghost batch norm -> Making batch norm updates happen in smaller chunks than the batch size
 6. Frozen batch norm scales -> We observe that the scale of batch norm ( learned parameter ) converges to about 0.25 over the course of training. Hence it makes sense to fix instead of trying to learn it. Operationally it would be better to fix it at 1 and instead change the alpha in CELU by a factor of 4 and also change lambda and weight decay by a factor of 4^2 and (1/4)^2 respectively
 7. Further increasing the learning rate by a factor of 4 and dividing weight decay by 4 improves results further.
-8. Input patch whitening -> PENDING
+8. Input patch whitening -> Input patch whitening is used to tackle covariance between channel and pixel. Here we replace the first 3x3 convolution wiht a fixed 3x3 whitening convolution, followed by a learnable 1x1 convolution.
 9. Exponential moving average -> Parameters of the model are exponential moving averages of past values. These simulate annealing of learning rates in a certain way.
 10. Test time augmentation -> Both the original image and its horizontal flip being given to the model and we pick the best output. Removing cutout further decreases the training time to 26s.
 
