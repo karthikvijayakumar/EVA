@@ -93,9 +93,9 @@ class Car(Widget):
         self.sensor1 = Vector(10, 0).rotate(self.angle) + self.pos
         self.sensor2 = Vector(10, 0).rotate((self.angle+30)%360) + self.pos
         self.sensor3 = Vector(10, 0).rotate((self.angle-30)%360) + self.pos
-        self.signal1 = int(np.sum(sand[int(self.sensor1_x)-10:int(self.sensor1_x)+10, int(self.sensor1_y)-10:int(self.sensor1_y)+10])/400)
-        self.signal2 = int(np.sum(sand[int(self.sensor2_x)-10:int(self.sensor2_x)+10, int(self.sensor2_y)-10:int(self.sensor2_y)+10])/400)
-        self.signal3 = int(np.sum(sand[int(self.sensor3_x)-10:int(self.sensor3_x)+10, int(self.sensor3_y)-10:int(self.sensor3_y)+10])/400)
+        self.signal1 = int(np.sum(sand[int(self.sensor1_x)-5:int(self.sensor1_x)+5, int(self.sensor1_y)-5:int(self.sensor1_y)+5])/100)
+        self.signal2 = int(np.sum(sand[int(self.sensor2_x)-5:int(self.sensor2_x)+5, int(self.sensor2_y)-5:int(self.sensor2_y)+5])/100)
+        self.signal3 = int(np.sum(sand[int(self.sensor3_x)-5:int(self.sensor3_x)+5, int(self.sensor3_y)-5:int(self.sensor3_y)+5])/100)
         if self.sensor1_x>longueur-10 or self.sensor1_x<10 or self.sensor1_y>largeur-10 or self.sensor1_y<10:
             self.signal1 = 10
         if self.sensor2_x>longueur-10 or self.sensor2_x<10 or self.sensor2_y>largeur-10 or self.sensor2_y<10:
@@ -126,7 +126,7 @@ class Game(Widget):
 
     def serve_car(self):
         self.car.center = self.center
-        self.car.velocity = Vector(6, 0)
+        self.car.velocity = Vector(2, 0)
 
     def update(self, dt):
 
@@ -160,18 +160,24 @@ class Game(Widget):
         self.goal.pos = Vector(goal_x, goal_y)
 
         if sand[int(self.car.x),int(self.car.y)] > 0:
+        # if (np.sum(sand[int(self.car.x)-3:int(self.car.x)+3, int(self.car.y)-3:int(self.car.y)+3])/36.0) > 0.3:
             self.car.velocity = Vector(0.5, 0).rotate(self.car.angle)
-            print(1, goal_x, goal_y, distance, int(self.car.x),int(self.car.y), im.read_pixel(int(self.car.x),int(self.car.y)))
-            last_reward = 100*(distance-last_distance)*100
+            # last_reward = -1 * distance * np.abs(last_distance-distance) * (0.5 if distance < last_distance else 1)
+            # last_reward = -10 * np.abs(distance) * 100 * (0.5 if distance<last_distance else 1)
+            last_reward = -10
+            if last_distance < distance:
+                last_reward = -20
+            print(1, goal_x, goal_y, distance, int(self.car.x), int(self.car.y),im.read_pixel(int(self.car.x), int(self.car.y)),last_reward, last_distance)
         else: # otherwise
             self.car.velocity = Vector(2, 0).rotate(self.car.angle)
-            # last_reward = -2
-            print(0, goal_x, goal_y, distance, int(self.car.x),int(self.car.y), im.read_pixel(int(self.car.x),int(self.car.y)))
-            last_reward = 2*(distance-last_distance)*100
-            # if distance < last_distance:
-            #     last_reward = 2
+            last_reward = -2
+            # last_reward = 0.1 * distance * (last_distance-distance) * (1 if distance < last_distance else 0.5)
+            # last_reward = 2 * (distance - last_distance) * 100
+            if distance < last_distance:
+                last_reward = 2
             # else:
             #     last_reward = last_reward +(-0.2)
+            print(0, goal_x, goal_y, distance, int(self.car.x), int(self.car.y),im.read_pixel(int(self.car.x), int(self.car.y)), last_reward, last_distance)
 
         if self.car.x < 20:
             self.car.x = 20
@@ -226,8 +232,6 @@ class MyPaintWidget(Widget):
             density = n_points/(length)
             touch.ud['line'].width = int(20 * density + 1)
             sand[int(touch.x) - 10 : int(touch.x) + 10, int(touch.y) - 10 : int(touch.y) + 10] = 1
-
-            
             last_x = x
             last_y = y
 

@@ -55,14 +55,14 @@ class Dqn():
         self.gamma = gamma
         self.reward_window = []
         self.model = Network(input_size, nb_action)
-        self.memory = ReplayMemory(100000)
+        self.memory = ReplayMemory(10000)
         self.optimizer = optim.Adam(self.model.parameters(), lr = 0.001)
         self.last_state = torch.Tensor(input_size).unsqueeze(0)
         self.last_action = 0
         self.last_reward = 0
     
     def select_action(self, state):
-        probs = F.softmax(self.model(Variable(state, volatile = True))*1000) # T=100
+        probs = F.softmax(self.model(Variable(state, volatile = True))*100) # T=100
         print(probs)
         action = probs.multinomial(1)
         return action.data[0,0]
@@ -72,7 +72,7 @@ class Dqn():
         next_outputs = self.model(batch_next_state).detach().max(1)[0]
         target = self.gamma*next_outputs + batch_reward
         td_loss = F.smooth_l1_loss(outputs, target)
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad() #Likely to enforce that gradients dont get accumalated over iterations
         td_loss.backward(retain_graph = True)
         self.optimizer.step()
     
@@ -80,8 +80,8 @@ class Dqn():
         new_state = torch.Tensor(new_signal).float().unsqueeze(0)
         self.memory.push((self.last_state, new_state, torch.LongTensor([int(self.last_action)]), torch.Tensor([self.last_reward])))
         action = self.select_action(new_state)
-        if len(self.memory.memory) > 100:
-            batch_state, batch_next_state, batch_action, batch_reward = self.memory.sample(100)
+        if len(self.memory.memory) > 1000:
+            batch_state, batch_next_state, batch_action, batch_reward = self.memory.sample(1000)
             self.learn(batch_state, batch_next_state, batch_reward, batch_action)
         self.last_action = action
         self.last_state = new_state
