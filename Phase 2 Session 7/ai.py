@@ -20,9 +20,9 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.input_size = input_size
         self.nb_action = nb_action
-        self.fc1 = nn.Linear(input_size, 30)
-        self.fc2 = nn.Linear(30, 60)
-        self.fc3 = nn.Linear(60, nb_action)
+        self.fc1 = nn.Linear(input_size, 15)
+        self.fc2 = nn.Linear(15, 30)
+        self.fc3 = nn.Linear(30, nb_action)
     
     def forward(self, state):
         x = F.relu(self.fc1(state))
@@ -62,16 +62,18 @@ class Dqn():
         self.last_reward = 0
     
     def select_action(self, state):
-        probs = F.softmax(self.model(Variable(state, volatile = True))*100) # T=100
+        probs = F.softmax(self.model(Variable(state, volatile = True))*200) # T=100
         print(probs)
         action = probs.multinomial(1)
         return action.data[0,0]
     
     def learn(self, batch_state, batch_next_state, batch_reward, batch_action):
+        
         outputs = self.model(batch_state).gather(1, batch_action.unsqueeze(1)).squeeze(1)
         next_outputs = self.model(batch_next_state).detach().max(1)[0]
         target = self.gamma*next_outputs + batch_reward
         td_loss = F.smooth_l1_loss(outputs, target)
+
         self.optimizer.zero_grad() #Likely to enforce that gradients dont get accumalated over iterations
         td_loss.backward(retain_graph = True)
         self.optimizer.step()
@@ -79,15 +81,16 @@ class Dqn():
     def update(self, reward, new_signal):
         new_state = torch.Tensor(new_signal).float().unsqueeze(0)
         self.memory.push((self.last_state, new_state, torch.LongTensor([int(self.last_action)]), torch.Tensor([self.last_reward])))
+
         action = self.select_action(new_state)
-        if len(self.memory.memory) > 1000:
-            batch_state, batch_next_state, batch_action, batch_reward = self.memory.sample(1000)
+        if len(self.memory.memory) > 100:
+            batch_state, batch_next_state, batch_action, batch_reward = self.memory.sample(100)
             self.learn(batch_state, batch_next_state, batch_reward, batch_action)
         self.last_action = action
         self.last_state = new_state
         self.last_reward = reward
         self.reward_window.append(reward)
-        if len(self.reward_window) > 10000:
+        if len(self.reward_window) > 1000:
             del self.reward_window[0]
         return action
     
