@@ -1,0 +1,160 @@
+#:kivy 1.0.9
+# ref: https://kivy.org/docs/tutorials/pong.html
+
+<Car>:
+    size: 16,8 
+    origin: 8,4 
+    canvas:
+        PushMatrix
+        Rotate:
+            angle: self.angle
+            origin: self.center
+        Rectangle:
+            pos: self.pos
+            size: self.size
+            source: "./images/car.png"
+        PopMatrix
+
+<Ball1>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+<Ball2>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball3>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball4>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball5>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball6>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball7>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball8>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Ball9>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 0.48,0.97,0.74,0.5
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Goal>:
+    size: 10,10
+    canvas:
+        Color:
+            rgba: 1,0,0,0.8
+        Ellipse:
+            pos: self.pos
+            size: self.size
+
+<Game>:
+    car: game_car
+    ball1: game_ball1
+    ball2: game_ball2
+    ball3: game_ball3
+    ball4: game_ball4
+    ball5: game_ball5
+    ball6: game_ball6
+    ball7: game_ball7
+    ball8: game_ball8
+    ball9: game_ball9 
+
+    goal: game_goal
+    canvas:
+        Rectangle:
+            pos: self.pos
+            size: 1273, 1049
+            source: "./images/lalbagh_map_lines_overlaid.png"
+
+    Car:
+        id: game_car
+        center: self.parent.center
+    Ball1:
+        id: game_ball1
+        center: self.parent.center
+    Ball2:
+        id: game_ball2
+        center: self.parent.center
+    Ball3:
+        id: game_ball3
+        center: self.parent.center
+    Ball4:
+        id: game_ball4
+        center: self.parent.center
+    Ball5:
+        id: game_ball5
+        center: self.parent.center
+    Ball6:
+        id: game_ball6
+        center: self.parent.center
+    Ball7:
+        id: game_ball7
+        center: self.parent.center
+    Ball8:
+        id: game_ball8
+        center: self.parent.center
+    Ball9:
+        id: game_ball9
+        center: self.parent.center
+    
+
+    Goal:
+        id: game_goal
+        center: self.parent.center
