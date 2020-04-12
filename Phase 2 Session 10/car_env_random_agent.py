@@ -39,6 +39,9 @@ class CityMap(gym.Env):
         self.roadmask = roadmask.copy()
         self.car_image = car_image.copy()
         
+        #Find size of the roadmask for reference later
+        self.roadmask_size_x, self.roadmask_size_y = self.roadmask.getbbox()[2:4]
+        
         # Pad the road mask image to allow for rotations
         # Amount of padding required = ( diagonal length of the observation window )/2
         self.padding_size = int(self.observation_window_size/np.sqrt(2))
@@ -83,11 +86,20 @@ class CityMap(gym.Env):
         # Car speed depends on whether we are riding on sand or not
         speed = 5 if roadmask.getpixel(( self.car_pos_x, self.car_pos_y )) == 0 else 2
         
-        displacement_x = speed * np.sin( action )
-        displacement_y = speed * np.cos( action )
+        displacement_x = speed * np.sin( self.car_angle )
+        displacement_y = -1 * speed * np.cos( self.car_angle )
+        # Displacement y is negative since the top of the frame is y=0
+        # Hence if the car is pointing upwards ( oriented at 0 degrees ) then the y values would decrease
+
+#         print( "action: " + str(action) + " = " + str(action*180/np.pi) + "; sin(action): " + str(np.sin( action )) + "; cos(action): " + str(np.cos( action )))
+#         print("Angle: " + str(self.car_angle*180/np.pi) + "; Speed: " + str(speed) + "; Displacement x: " +str(displacement_x) + ", y: " + str(displacement_y) )
         
         self.car_pos_x = self.car_pos_x + displacement_x
         self.car_pos_y = self.car_pos_y + displacement_y
+        
+        # Clip position to boundaries of the image
+        self.car_pos_x = np.clip(self.car_pos_x, 0, self.roadmask_size_x-1) 
+        self.car_pos_y = np.clip(self.car_pos_y, 0, self.roadmask_size_y-1)
         
         # 2. Screen grab from next position ( Next state )
         next_state = self._extract_current_frame()
@@ -97,7 +109,6 @@ class CityMap(gym.Env):
         new_distance_from_goal = np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 )
         
         pixel_value_at_car_pos = self.roadmask.getpixel((self.car_pos_x, self.car_pos_y))
-        print( pixel_value_at_car_pos in [0,1] )
 #         assert pixel_value_at_car_pos in [0,1], "Pixel values are not exactly 0 or 1")
         
         if( pixel_value_at_car_pos == 1 ):
@@ -182,7 +193,7 @@ class CityMap(gym.Env):
     def reset(self):
         #Randomly initialise the starting position and set velocity
         self.car_pos_x = np.random.randint( 0, roadmask.size[0] )
-        self.car_pos_x = np.random.randint( 0, roadmask.size[0] )
+        self.car_pos_y = np.random.randint( 0, roadmask.size[1] )
         # Car position is measured with respect to the road mask ( without padding ). (0,0) is top left
         self.car_angle = np.random.default_rng().random() * np.pi * 2.0
         # Initial angle ranges from 0 to 2*pi
@@ -215,14 +226,10 @@ class CityMap(gym.Env):
         
         # Create a copy of the car and rotate it to the currrent orientation according to the env state
         # Using 90 - curr_angle since the car image oriented horizontally while our angles are from the vertical
-        car_image_copy = self.car_image.copy().rotate( 90-(self.car_angle*180/np.pi), expand = True )
+        car_image_copy = self.car_image.copy().rotate( 360 - (self.car_angle*180/np.pi), expand = True )
         car_size_x, car_size_y = car_image_copy.getbbox()[2:4] # The last 2 coordinates represent the size of the car
         
         #Overlay the car on the map ( copy )
-#         print(self.car_pos_x)
-#         print(self.car_pos_y)
-#         print(self.car_pos_x - (car_size_x/2))
-#         print(self.car_pos_y - int(car_size_y/2))
         map_copy.paste( car_image_copy, box = ( int(self.car_pos_x - (car_size_x/2)), int(self.car_pos_y - (car_size_y/2)) ) )
         del(car_image_copy)
         del(car_size_x)
@@ -235,7 +242,6 @@ class CityMap(gym.Env):
             if self.viewer is None:
                 self.viewer = rendering.SimpleImageViewer()
             self.viewer.imshow(np.asarray(map_copy))
-            print(self.viewer.isopen)
             return self.viewer.isopen
     
     def close(self):
@@ -259,7 +265,7 @@ if __name__ == "__main__":
     
     citymap = Image.open("images/MASK1.png")
     roadmask = Image.open("images/MASK1.png").convert('L')
-    car_image = Image.open("images/car.png")
+    car_image = Image.open("images/car_upright.png")
     car_image_width, car_image_height = car_image.getbbox()[2:4]
     car_image_resized = car_image.resize( (int(car_image_width/2), int(car_image_height/2)) )
     
@@ -270,11 +276,10 @@ if __name__ == "__main__":
     env = wrappers.Monitor(env, monitor_dir, force = True)
     env.reset()
     
-    for i in range(100):
+    for i in range(1000):
         curr_action = env.action_space.sample()
-        print("Current action: " , curr_action)
+#         print("Current action: " , (curr_action*180/np.pi) )
         observation, reward, done, info = env.step(curr_action)
         if(done):
             break
-        time.sleep(1)
     env.close()
