@@ -44,15 +44,15 @@ class ReplayBuffer(object):
     # return np.array(batch_states), np.array(batch_next_states), np.array(batch_actions), np.array(batch_rewards), np.array(batch_dones)
 
 
-def evaluate_policy(policy, env, eval_episodes=10):
+def evaluate_policy(policy, env, eval_episodes=3):
   avg_reward = 0.
   for _ in range(eval_episodes):
     obs = env.reset()
-    print("Observatin shape from evaluate policy")
-    print(type(obs))
-    print(obs.shape)
+    # print("Observatin shape from evaluate policy")
+    # print(type(obs))
+    # print(obs.shape)
     done = False
-    print("Entering while loop")
+    # print("Entering while loop")
     while not done:
       action = policy.select_action(obs)
       obs, reward, done, _ = env.step(action)

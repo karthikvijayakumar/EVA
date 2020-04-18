@@ -17,9 +17,9 @@ class CityMap(gym.Env):
     # observation_window_size is the side length of the square surrounding the car
     # The car would see (observation_window_size/2) ahead and behind and (observation_window_size/2) to the left and right
     
-    max_turn_radians = np.pi/6.0
-    # pi/6 radians = 180/6 = 30 degrees
-    # The car can turn 30 degrees to the left or right    
+    max_turn_radians = np.pi/36.0
+    # pi/6 radians = 180/36 = 5 degrees
+    # The car can turn 5 degrees to the left or right    
     
     distance_threshold_done = 30
     # Distance to target to reach before considering the episode done
@@ -27,7 +27,7 @@ class CityMap(gym.Env):
     goal_circle_radius = int(distance_threshold_done/2)
 
     #Max steps before we call the episode done
-    max_episode_steps = 1000
+    max_episode_steps = 10000
     
     def __init__(self, citymap, roadmask, car_image):
         self.action_space = spaces.Box(low = np.float64(-self.max_turn_radians), high = np.float64(self.max_turn_radians), shape = (1,) ) 
@@ -57,6 +57,8 @@ class CityMap(gym.Env):
         
         self.car_pos_x = 0
         self.car_pos_y = 0
+
+        self.num_steps = 0
         
         self.reset()
 
@@ -73,8 +75,10 @@ class CityMap(gym.Env):
         # 1. Next position
         # 2. Screen grab from next position ( Next state )
         # 3. Reward on moving to next position
-        # 4. Is the episode done
-        # 5. Any info to pass on to the agent
+        # 4. Update number of steps taken
+        # 5. Is the episode done
+        # 6. Any info to pass on to the agent
+        
 
 
         # 1. Next position
@@ -113,32 +117,50 @@ class CityMap(gym.Env):
         
         if( pixel_value_at_car_pos == 1 ):
             #Currently on sand
-            reward = -1
-        elif( new_distance_from_goal < self.distance_from_goal ):
-            reward = -0.2
+            # reward = -1
+            reward = -100 * ((new_distance_from_goal+100)/1650) # 1650 is the length of the diagonal of the image
+        elif( new_distance_from_goal > self.distance_from_goal ):
+            # reward = -0.2
+            reward = -10.2 * (new_distance_from_goal/1650)
+        elif ( new_distance_from_goal == self.distance_from_goal ):
+            # In one of the corners and driving into the corner
+            reward = -100
         else:
-            reward = 0.1
+            # new_distance_from_goal < self.distance_from_goal
+            # reward = 0.1
+            reward = 0.2 * ((1650-new_distance_from_goal)/1650)
+
         
         self.distance_from_goal = new_distance_from_goal
+
+        # 4. Update number of steps taken
+
+        self.num_steps += 1
         
-        # 4. Is the episode done?
+        # 5. Is the episode done?
         
-        if(new_distance_from_goal < self.distance_threshold_done):
+        if( new_distance_from_goal < self.distance_threshold_done  or self.num_steps == self.max_episode_steps ):
+            # Either we have reached the target position or we have exceed the max steps for this episode
             done = 1
             self.reset()
-            next_state = np.zeros( self.observation_window_size**2 ).reshape((self.observation_window_size,self.observation_window_size) )
+            next_state = np.expand_dims( 
+                np.expand_dims( 
+                    np.zeros( self.observation_window_size**2 ).reshape((self.observation_window_size,self.observation_window_size) ),
+                    axis = 0 
+                ),
+                axis = 0 )
         else:
             done = 0
-        
-        # 5. Any info to pass on to the agent
 
-        print(
-            "x: "+ str(self.car_pos_x) + 
-            "; y: " + str(self.car_pos_y) + 
-            "; angle(deg): " + str(self.car_angle*180/np.pi) + 
-            "; action: " + str(action*180/np.pi) +
-            "; reward: " + str(reward)
-            )
+        # 6. Any info to pass on to the agent
+
+        # print(
+        #     "x: "+ str(self.car_pos_x.round(0)) + 
+        #     "; y: " + str(self.car_pos_y.round(0)) + 
+        #     "; angle(deg): " + str(np.round(self.car_angle*180/np.pi),2) + 
+        #     "; action: " + str(np.round(action*180/np.pi,2)) +
+        #     "; reward: " + str(reward)
+        #     )
         
         return next_state, reward, done, {}
 
@@ -209,6 +231,9 @@ class CityMap(gym.Env):
         
         #Distance from goal
         self.distance_from_goal = np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 )
+
+        #Set num_steps to 0
+        self.num_steps = 0
         
         return self._extract_current_frame()
 
@@ -248,8 +273,8 @@ class CityMap(gym.Env):
         current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
         
         if mode == 'rgb_array':
-            return np.asarray(current_frame)
-            # return np.asarray(map_copy)
+            # return np.asarray(current_frame)
+            return np.asarray(map_copy)
 #         elif mode == 'human':
 #             if self.viewer is None:
 #                 self.viewer = rendering.SimpleImageViewer()

@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from collections import deque
 
 """
-    Compute ooutput size of convolution layer with given kernel size and stride
+    Compute output size of convolution layer with given kernel size and stride
     Assumes no padding
 """
 def conv2d_size_out(size, kernel_size = 3, stride = 2, padding = 1):
@@ -24,16 +24,17 @@ class Actor(nn.Module):
   def __init__(self, state_dim, action_dim, max_action):
     super(Actor, self).__init__()
     
-    self.conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=2, padding = 1)
-    self.bn1 = nn.BatchNorm2d(16)
-    self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding = 1)
-    self.bn2 = nn.BatchNorm2d(32)
-    self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    self.bn3 = nn.BatchNorm2d(32)
+    self.conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
+    self.bn1 = nn.BatchNorm2d(4)
+    self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
+    self.bn2 = nn.BatchNorm2d(8)
+    #self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
+    #self.bn3 = nn.BatchNorm2d(32)
     
-    conv3_output_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
-    linear_input_size = conv3_output_size * conv3_output_size * 32
-    print("Linear input size : ", linear_input_size)
+    #conv3_output_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
+    conv3_output_size = conv2d_size_out(conv2d_size_out(state_dim))
+    linear_input_size = conv3_output_size * conv3_output_size * 8
+    # print("Linear input size : ", linear_input_size)
     
     self.head = nn.Linear(linear_input_size, action_dim)
     self.max_action = max_action
@@ -41,7 +42,7 @@ class Actor(nn.Module):
   def forward(self, x):
     x = F.relu(self.bn1(self.conv1(x)))
     x = F.relu(self.bn2(self.conv2(x)))
-    x = F.relu(self.bn3(self.conv3(x)))
+    # x = F.relu(self.bn3(self.conv3(x)))
     # with torch.no_grad():
     #     print("Shape x after convolutions: " + str(x.shape))
     #     print("Flattened x shape: " + str(x.view(x.size(0), -1).shape))
@@ -55,28 +56,32 @@ class Critic(nn.Module):
     super(Critic, self).__init__()
     self.max_action = max_action
     
-    conv3_output_side_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
-    conv3_total_output_size = conv3_output_side_size * conv3_output_side_size * 32
+    # conv3_output_side_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
+    # conv3_total_output_size = conv3_output_side_size * conv3_output_side_size * 32
+    
+    conv2_output_side_size = conv2d_size_out(conv2d_size_out(state_dim))
+    conv2_total_output_size = conv2_output_side_size * conv2_output_side_size * 8
+    
     
     # Defining the first Critic neural network
-    self.critic1_conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=2, padding = 1)
-    self.critic1_bn1 = nn.BatchNorm2d(16)
-    self.critic1_conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding = 1)
-    self.critic1_bn2 = nn.BatchNorm2d(32)
-    self.critic1_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    self.critic1_bn3 = nn.BatchNorm2d(32) 
-    self.critic1_head = nn.Linear(conv3_total_output_size+1, 1)
+    self.critic1_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
+    self.critic1_bn1 = nn.BatchNorm2d(4)
+    self.critic1_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
+    self.critic1_bn2 = nn.BatchNorm2d(8)
+    # self.critic1_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
+    # self.critic1_bn3 = nn.BatchNorm2d(32) 
+    self.critic1_head = nn.Linear(conv2_total_output_size+1, 1)
     # Critic gives out only 1 value hence the output dimension is one
     # Critic also takes action as input which is a scalar, hence adding 1 to linear_input_size
     
     # Defining the second Critic neural network
-    self.critic2_conv1 = nn.Conv2d(1, 16, kernel_size=3, stride=2, padding = 1)
-    self.critic2_bn1 = nn.BatchNorm2d(16)
-    self.critic2_conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding = 1)
-    self.critic2_bn2 = nn.BatchNorm2d(32)
-    self.critic2_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    self.critic2_bn3 = nn.BatchNorm2d(32)
-    self.critic2_head = nn.Linear(conv3_total_output_size+1, 1)
+    self.critic2_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
+    self.critic2_bn1 = nn.BatchNorm2d(4)
+    self.critic2_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
+    self.critic2_bn2 = nn.BatchNorm2d(8)
+    # self.critic2_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
+    # self.critic2_bn3 = nn.BatchNorm2d(32)
+    self.critic2_head = nn.Linear(conv2_total_output_size+1, 1)
     # Critic gives out only 1 value hence the output dimension is one
     # Critic also takes action as input which is a scalar, hence adding 1 to linear_input_size
 
@@ -87,7 +92,7 @@ class Critic(nn.Module):
     # Pass through convolutional layers
     x1 = F.relu(self.critic1_bn1(self.critic1_conv1(x)))
     x1 = F.relu(self.critic1_bn2(self.critic1_conv2(x1)))
-    x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    # x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
     x1 = x1.view(x1.size(0), -1)
  
     #Concatenate action with the output of the convolutional layers
@@ -103,7 +108,7 @@ class Critic(nn.Module):
     #Pass through convolutional layers
     x2 = F.relu(self.critic2_bn1(self.critic2_conv1(x)))
     x2 = F.relu(self.critic2_bn2(self.critic2_conv2(x2)))
-    x2 = F.relu(self.critic2_bn3(self.critic2_conv3(x2)))
+    # x2 = F.relu(self.critic2_bn3(self.critic2_conv3(x2)))
     x2 = x2.view(x1.size(0), -1)
  
     #Concatenate action with the output of the convolutional layers
@@ -121,7 +126,7 @@ class Critic(nn.Module):
     # Pass through convolutional layers
     x1 = F.relu(self.critic1_bn1(self.critic1_conv1(x)))
     x1 = F.relu(self.critic1_bn2(self.critic1_conv2(x1)))
-    x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    # x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
     x1 = x1.view(x1.size(0), -1)
  
     #Concatenate action with the output of the convolutional layers
@@ -153,8 +158,13 @@ class TD3(object):
 
   def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005, policy_noise=0.2, noise_clip=0.5, policy_freq=2):
     
+    print( "Replay buffer size at beginning of call to train: " + str(len(replay_buffer.storage)) )
+    actor_conv1_frozen = self.actor.conv1.weight.data.clone().detach()
+    actor_conv2_frozen = self.actor.conv2.weight.data.clone().detach()
+    actor_head_frozen = self.actor.head.weight.data.clone().detach()
+
     for it in range(iterations):
-      
+      # print("Training iteration local: " + str(it))
       # Step 4: We sample a batch of transitions (s, s’, a, r) from the memory
       batch_states, batch_next_states, batch_actions, batch_rewards, batch_dones = replay_buffer.sample(batch_size)
       
@@ -215,11 +225,14 @@ class TD3(object):
       self.critic_optimizer.step()
       
       # Step 13: Once every two iterations, we update our Actor model by performing gradient ascent on the output of the first Critic model
-      if it % policy_freq == 0:
+      if it % policy_freq == 0:        
+
         actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
+        # print("Actor loss: " + str(actor_loss))
+
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        self.actor_optimizer.step()
+        self.actor_optimizer.step()        
         
         # Step 14: Still once every two iterations, we update the weights of the Actor target by polyak averaging
         for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
@@ -228,6 +241,15 @@ class TD3(object):
         # Step 15: Still once every two iterations, we update the weights of the Critic target by polyak averaging
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
           target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+    
+    #Compute change in weights after the training iterations
+    actor_conv1_total_change = torch.sum( (torch.abs(self.actor.conv1.weight.data - actor_conv1_frozen) ) ).detach().cpu().numpy().flatten()[0]
+    actor_conv2_total_change = torch.sum( (torch.abs(self.actor.conv2.weight.data - actor_conv2_frozen) ) ).detach().cpu().numpy().flatten()[0]
+    actor_head_total_change = torch.sum( (torch.abs(self.actor.head.weight.data - actor_head_frozen) ) ).detach().cpu().numpy().flatten()[0]
+
+    print("Actor Conv 1 total change: ", actor_conv1_total_change )
+    print("Actor Conv 2 total change: ", actor_conv2_total_change )
+    print("Actor head total change: ", actor_head_total_change )
   
   # Making a save method to save a trained model
   def save(self, filename, directory):
