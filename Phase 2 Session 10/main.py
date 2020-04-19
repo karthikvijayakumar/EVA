@@ -13,12 +13,8 @@ from gym import wrappers
 from torch.autograd import Variable
 from collections import deque
 from PIL import Image, ImageOps, ImageDraw
+from tqdm import tqdm, trange
 import os
-
-# from gym import error, spaces, utils, wrappers
-# from gym.utils import seeding
-# from gym.envs.registration import register
-
 
 # Importing self written classes
 from models import TD3
@@ -40,16 +36,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #Setting params
 env_name = "CityMap"
 seed = 0 # Random seed number
-#TODO: Change start_timestamp to 1e4 again
 start_timesteps = 1e4 # Number of iterations/timesteps before which the model randomly chooses an action, and after which it starts to use the policy network
-eval_freq = 5e3 # How often the evaluation step is performed (after how many timesteps)
+eval_freq = 3e4 # How often the evaluation step is performed (after how many timesteps)
 max_timesteps = 5e5 # Total number of iterations/timesteps
 save_models = True # Boolean checker whether or not to save the pre-trained model
-expl_noise = 0 #0.1 # Exploration noise - STD value of exploration Gaussian noise
+expl_noise = (0.2*np.pi)/(2.7*180) # Exploration noise - STD value of exploration Gaussian noise
 batch_size = 100 # Size of the batch
 discount = 0.99 # Discount factor gamma, used in the calculation of the total discounted reward
 tau = 0.005 # Target network update rate
-policy_noise = 0.2 # STD of Gaussian noise added to the actions for the exploration purposes
+policy_noise = (0.2*np.pi)/(2.7*180) # STD of Gaussian noise added to the actions for the exploration purposes
 noise_clip = 0.5 # Maximum value of the Gaussian noise added to the actions (policy)
 policy_freq = 2 # Number of iterations to wait before the policy network (Actor model) is updated
 train_iterations = 100 # Number of iterations to run the training cycle for each time an episide is over
@@ -88,7 +83,7 @@ torch.manual_seed(seed)
 np.random.seed(seed)
 state_dim = env.observation_window_size
 action_dim = 1
-max_action = env.max_turn_radians
+max_action = env.max_action
 
 #Create the policy network
 policy = TD3(state_dim, action_dim, max_action, device)
@@ -124,7 +119,7 @@ while total_timesteps < max_timesteps:
 
     # If we are not at the very beginning, we start the training process of the model
     if total_timesteps != 0:
-      print("Total Timesteps: {} Episode Num: {} Reward: {}".format(total_timesteps, episode_num, episode_reward))
+      print("Total Timesteps: {} Episode Num: {} Episode length: {} Reward: {}".format(total_timesteps, episode_num, episode_timesteps, episode_reward))
       policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau, policy_noise, noise_clip, policy_freq)
 
     # We evaluate the episode and we save the policy
@@ -153,7 +148,7 @@ while total_timesteps < max_timesteps:
     action = policy.select_action(obs)
     # If the explore_noise parameter is not 0, we add noise to the action and we clip it
     if expl_noise != 0:
-      action = (action + np.random.normal(0, expl_noise, size=env.action_space.shape[0])).clip(env.action_space.low, env.action_space.high)
+      action = np.clip( (action + np.random.normal(0, expl_noise)), env.action_space.low, env.action_space.high)[0]
   
   # The agent performs the action in the environment, then reaches the next state and receives the reward
   new_obs, reward, done, _ = env.step(action)

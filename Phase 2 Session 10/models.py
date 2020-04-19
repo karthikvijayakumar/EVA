@@ -11,79 +11,62 @@ import torch.nn.functional as F
 from gym import wrappers
 from torch.autograd import Variable
 from collections import deque
-
-"""
-    Compute output size of convolution layer with given kernel size and stride
-    Assumes no padding
-"""
-def conv2d_size_out(size, kernel_size = 3, stride = 2, padding = 1):
-    return int((size - kernel_size + (2*padding))/stride) + 1
+import random
 
 class Actor(nn.Module):
-  
-  def __init__(self, state_dim, action_dim, max_action):
-    super(Actor, self).__init__()
-    
-    self.conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
-    self.bn1 = nn.BatchNorm2d(4)
-    self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
-    self.bn2 = nn.BatchNorm2d(8)
-    #self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    #self.bn3 = nn.BatchNorm2d(32)
-    
-    #conv3_output_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
-    conv3_output_size = conv2d_size_out(conv2d_size_out(state_dim))
-    linear_input_size = conv3_output_size * conv3_output_size * 8
-    # print("Linear input size : ", linear_input_size)
-    
-    self.head = nn.Linear(linear_input_size, action_dim)
-    self.max_action = max_action
-    
-  def forward(self, x):
-    x = F.relu(self.bn1(self.conv1(x)))
-    x = F.relu(self.bn2(self.conv2(x)))
-    # x = F.relu(self.bn3(self.conv3(x)))
-    # with torch.no_grad():
-    #     print("Shape x after convolutions: " + str(x.shape))
-    #     print("Flattened x shape: " + str(x.view(x.size(0), -1).shape))
-#         print("Shape of output after FC layer")     
-    
-    return self.max_action * torch.tanh(self.head(x.view(x.size(0), -1)))
+    def __init__(self, state_dim, action_dim, max_action):
+        super(Actor, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 4, kernel_size=3,padding = 1, stride =2)
+        self.bn1 = nn.BatchNorm2d(4)
+        self.conv2 = nn.Conv2d(4,8, kernel_size=3, padding = 1, stride =2)
+        self.bn2 = nn.BatchNorm2d(8)
+        self.conv3 = nn.Conv2d(8,16, kernel_size=3, padding = 1, stride =2)
+        self.bn3 = nn.BatchNorm2d(16)
+        self.conv4 = nn.Conv2d(16, 32, kernel_size=3)
+        self.bn4 = nn.BatchNorm2d(32)
+        self.head = nn.Linear(32, action_dim)
+        self.max_action = max_action
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.avg_pool2d( x, 3 )
+        return self.max_action * torch.tanh(self.head(x.view( x.size(0),-1)))
     
 class Critic(nn.Module):
 
   def __init__(self, state_dim, action_dim, max_action):
     super(Critic, self).__init__()
     self.max_action = max_action
-    
-    # conv3_output_side_size = conv2d_size_out(conv2d_size_out(conv2d_size_out(state_dim)))
-    # conv3_total_output_size = conv3_output_side_size * conv3_output_side_size * 32
-    
-    conv2_output_side_size = conv2d_size_out(conv2d_size_out(state_dim))
-    conv2_total_output_size = conv2_output_side_size * conv2_output_side_size * 8
-    
-    
+        
     # Defining the first Critic neural network
-    self.critic1_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
+    self.critic1_conv1 = nn.Conv2d(1, 4, kernel_size=3,padding = 1, stride =2)
     self.critic1_bn1 = nn.BatchNorm2d(4)
-    self.critic1_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
+    self.critic1_conv2 = nn.Conv2d(4,8, kernel_size=3, padding = 1, stride =2)
     self.critic1_bn2 = nn.BatchNorm2d(8)
-    # self.critic1_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    # self.critic1_bn3 = nn.BatchNorm2d(32) 
-    self.critic1_head = nn.Linear(conv2_total_output_size+1, 1)
+    self.critic1_conv3 = nn.Conv2d(8,16, kernel_size=3, padding = 1, stride =2)
+    self.critic1_bn3 = nn.BatchNorm2d(16)
+    self.critic1_conv4 = nn.Conv2d(16, 32, kernel_size=3)
+    self.critic1_bn4 = nn.BatchNorm2d(32)
+    self.critic1_head = nn.Linear(33, 1)
     # Critic gives out only 1 value hence the output dimension is one
-    # Critic also takes action as input which is a scalar, hence adding 1 to linear_input_size
+    # Critic also takes action as input which is a scalar, hence adding 1 to the output of the conv layers
     
     # Defining the second Critic neural network
-    self.critic2_conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2, padding = 1)
+    self.critic2_conv1 = nn.Conv2d(1, 4, kernel_size=3,padding = 1, stride =2)
     self.critic2_bn1 = nn.BatchNorm2d(4)
-    self.critic2_conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding = 1)
+    self.critic2_conv2 = nn.Conv2d(4,8, kernel_size=3, padding = 1, stride =2)
     self.critic2_bn2 = nn.BatchNorm2d(8)
-    # self.critic2_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=2, padding = 1)
-    # self.critic2_bn3 = nn.BatchNorm2d(32)
-    self.critic2_head = nn.Linear(conv2_total_output_size+1, 1)
+    self.critic2_conv3 = nn.Conv2d(8,16, kernel_size=3, padding = 1, stride =2)
+    self.critic2_bn3 = nn.BatchNorm2d(16)
+    self.critic2_conv4 = nn.Conv2d(16, 32, kernel_size=3)
+    self.critic2_bn4 = nn.BatchNorm2d(32)
+    self.critic2_head = nn.Linear(33, 1)
     # Critic gives out only 1 value hence the output dimension is one
-    # Critic also takes action as input which is a scalar, hence adding 1 to linear_input_size
+    # Critic also takes action as input which is a scalar, hence adding 1 to the output of the conv layers
 
   def forward(self, x, u):
     ###############
@@ -92,9 +75,11 @@ class Critic(nn.Module):
     # Pass through convolutional layers
     x1 = F.relu(self.critic1_bn1(self.critic1_conv1(x)))
     x1 = F.relu(self.critic1_bn2(self.critic1_conv2(x1)))
-    # x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    x1 = F.relu(self.critic1_bn4(self.critic1_conv4(x1)))
+    x1 = F.avg_pool2d( x1, 3 ) 
     x1 = x1.view(x1.size(0), -1)
- 
+    
     #Concatenate action with the output of the convolutional layers
     x1 = torch.cat([x1, u], 1)
     
@@ -108,8 +93,10 @@ class Critic(nn.Module):
     #Pass through convolutional layers
     x2 = F.relu(self.critic2_bn1(self.critic2_conv1(x)))
     x2 = F.relu(self.critic2_bn2(self.critic2_conv2(x2)))
-    # x2 = F.relu(self.critic2_bn3(self.critic2_conv3(x2)))
-    x2 = x2.view(x1.size(0), -1)
+    x2 = F.relu(self.critic2_bn3(self.critic2_conv3(x2)))
+    x2 = F.relu(self.critic2_bn4(self.critic2_conv4(x2)))
+    x2 = F.avg_pool2d( x2, 3 ) 
+    x2 = x2.view(x2.size(0), -1)
  
     #Concatenate action with the output of the convolutional layers
     x2 = torch.cat([x2, u], 1)
@@ -126,7 +113,9 @@ class Critic(nn.Module):
     # Pass through convolutional layers
     x1 = F.relu(self.critic1_bn1(self.critic1_conv1(x)))
     x1 = F.relu(self.critic1_bn2(self.critic1_conv2(x1)))
-    # x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    x1 = F.relu(self.critic1_bn3(self.critic1_conv3(x1)))
+    x1 = F.relu(self.critic1_bn4(self.critic1_conv4(x1)))
+    x1 = F.avg_pool2d( x1, 3 )
     x1 = x1.view(x1.size(0), -1)
  
     #Concatenate action with the output of the convolutional layers
@@ -154,16 +143,16 @@ class TD3(object):
 
   def select_action(self, state):
     state = torch.Tensor(state).to(self.device)
-    return self.actor(state).cpu().data.numpy().flatten()[0]
+    return self.actor(state).detach().cpu().data.numpy().flatten()[0]
 
   def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005, policy_noise=0.2, noise_clip=0.5, policy_freq=2):
     
-    print( "Replay buffer size at beginning of call to train: " + str(len(replay_buffer.storage)) )
+    # print( "Replay buffer size at beginning of call to train: " + str(len(replay_buffer.storage)) )
     actor_conv1_frozen = self.actor.conv1.weight.data.clone().detach()
     actor_conv2_frozen = self.actor.conv2.weight.data.clone().detach()
     actor_head_frozen = self.actor.head.weight.data.clone().detach()
 
-    for it in range(iterations):
+    for it in trange(iterations, desc = "TD3 train function loop"):
       # print("Training iteration local: " + str(it))
       # Step 4: We sample a batch of transitions (s, s’, a, r) from the memory
       batch_states, batch_next_states, batch_actions, batch_rewards, batch_dones = replay_buffer.sample(batch_size)
@@ -172,6 +161,7 @@ class TD3(object):
       # Each element of the batch_states, batch_next_states is of the shape (1,1,size,size)
       # Batch_states and batch_next_states have shapes (batch_size,1,1,size,size)
       # What we want to feed to the conv networks is (batch_size, 1, size, size)
+      # torch.Tensor(batch_states) gives us a tensor of the shape (batch_size,1,1,size,size)
       # Hence we squeeze out the first dimension ( zero'th dimension of size batch_size is intact )
 
       # Each element of batch_rewards, batch_actions, batch_dones is a scalar
@@ -192,7 +182,7 @@ class TD3(object):
       # noise = noise.clamp(-noise_clip, noise_clip)
       # noise = noise.reshape(-1,1)
       noise_distribution = torch.distributions.normal.Normal(0, policy_noise)
-      noise = noise_distribution.sample(torch.Size([batch_size])).clamp(-noise_clip,noise_clip).view(-1,1)
+      noise = noise_distribution.sample(torch.Size([batch_size])).clamp(-noise_clip,noise_clip).view(-1,1).to(self.device)
       next_action = (next_action + noise).clamp(-self.max_action, self.max_action)
       
       # print("Action shape: " + str(action.shape))
@@ -210,12 +200,6 @@ class TD3(object):
       # Step 10: The two Critic models take each the couple (s, a) as input and return two Q-values Q1(s,a) and Q2(s,a) as outputs
       current_Q1, current_Q2 = self.critic(state, action)
       
-#       print("Current Q1: ", current_Q1)
-#       print("Current Q2: ", current_Q2)
-#       print("Target Q: ", target_Q)
-
-#       exit(0)
-    
       # Step 11: We compute the loss coming from the two Critic models: Critic Loss = MSE_Loss(Q1(s,a), Qt) + MSE_Loss(Q2(s,a), Qt)
       critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
       
@@ -228,7 +212,6 @@ class TD3(object):
       if it % policy_freq == 0:        
 
         actor_loss = -self.critic.Q1(state, self.actor(state)).mean()
-        # print("Actor loss: " + str(actor_loss))
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

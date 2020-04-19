@@ -17,6 +17,8 @@ class CityMap(gym.Env):
     # observation_window_size is the side length of the square surrounding the car
     # The car would see (observation_window_size/2) ahead and behind and (observation_window_size/2) to the left and right
     
+    max_action = 1
+
     max_turn_radians = np.pi/36.0
     # pi/6 radians = 180/36 = 5 degrees
     # The car can turn 5 degrees to the left or right    
@@ -27,10 +29,10 @@ class CityMap(gym.Env):
     goal_circle_radius = int(distance_threshold_done/2)
 
     #Max steps before we call the episode done
-    max_episode_steps = 10000
+    max_episode_steps = 2500
     
     def __init__(self, citymap, roadmask, car_image):
-        self.action_space = spaces.Box(low = np.float64(-self.max_turn_radians), high = np.float64(self.max_turn_radians), shape = (1,) ) 
+        self.action_space = spaces.Box(low = np.float64(-self.max_action), high = np.float64(self.max_action), shape = (1,) ) 
         # Action space is how many degrees to turn the car in radians
         
         self.observation_space = spaces.Box(low = 0, high = 255, shape = (self.observation_window_size, self.observation_window_size) ) 
@@ -71,20 +73,23 @@ class CityMap(gym.Env):
     """
     def step(self, action):
 
-        # Things to compute
-        # 1. Next position
-        # 2. Screen grab from next position ( Next state )
-        # 3. Reward on moving to next position
-        # 4. Update number of steps taken
-        # 5. Is the episode done
-        # 6. Any info to pass on to the agent
+        # Type check to ensure we get a scalar
+        assert ((type(action) == np.float32) | (type(action) == np.float64)), "Input type should be a float32 or float64"
         
-
+        # Things to compute
+        # 1. Next position 
+        # 2. Orientation of car towards goal
+        # 3. Combine Screen grab from next position and orientation to produce the next state
+        # 5. Reward on moving to next position
+        # 6. Update number of steps taken
+        # 7. Is the episode done
+        # 8. Any info to pass on to the agent     
 
         # 1. Next position
-        # From (pos_x, pos_y) we move forward with 'speed' steps in the direction 'angle+action'
+        # From (pos_x, pos_y) we move forward with 'speed' steps in the direction 'angle+action*max_turn_radians'
+        # The action given by the agent is from -1 to 1. The env maps the action to degrees of turn
         # New angle of car
-        self.car_angle = self.car_angle + action
+        self.car_angle = self.car_angle + (action*self.max_turn_radians)
         if(self.car_angle < 0):
             self.car_angle = (2*np.pi) + self.car_angle
         elif(self.car_angle > (2*np.pi)):
@@ -105,7 +110,19 @@ class CityMap(gym.Env):
         self.car_pos_x = np.clip(self.car_pos_x, 0, self.roadmask_size_x-1) 
         self.car_pos_y = np.clip(self.car_pos_y, 0, self.roadmask_size_y-1)
         
-        # 2. Screen grab from next position ( Next state )
+        # 3. orientation towards goal ( Next state )
+        # Definition of orientation:
+        # With respect to the axes of car ( car's forward pointing upwards ), at how many degrees is the goal
+        # We compute this in two steps:
+        # Step 3.a: At what angle is the goal with respect to the vertical
+        # Angle of goal wrt horizontal is tan_inverse( distance in y axis / distance in x axis )
+        # Angle of goal wrt vertical is 90 + the above = 90 + tan_inverse( distance in y axis / distance in x axis )        
+        # Step 3.b: Subtract the angle of the car from the above quantity to get angle relative to the car axes
+        # Angle of goal wrt car = 90 + tan_inverse( distance in y axis / distance in x axis ) - car angle wrt vertical
+        
+        orientation = np.pi/2.0 + np.arctan2( self.goal_y - self.car_pos_y, self.goal_x - self.car_pos_x ) - self.car_angle      
+
+        # 2. Screen grab from next position        
         next_state = self._extract_current_frame()
         
         # 3. Reward on moving to next position
@@ -130,11 +147,18 @@ class CityMap(gym.Env):
             # reward = 0.1
             reward = 0.2 * ((1650-new_distance_from_goal)/1650)
 
-        
+        # Change reward on termination conditions
+
+        if( new_distance_from_goal < self.distance_threshold_done ):
+            # Give high +ve reward when it has reached the goal
+            reward = 100
+        elif( self.num_steps == self.max_episode_steps ):
+            # Give high -ve reward when the num steps has crossed max steps
+            reward = -1000
+               
         self.distance_from_goal = new_distance_from_goal
-
+        
         # 4. Update number of steps taken
-
         self.num_steps += 1
         
         # 5. Is the episode done?
@@ -145,7 +169,9 @@ class CityMap(gym.Env):
             self.reset()
             next_state = np.expand_dims( 
                 np.expand_dims( 
-                    np.zeros( self.observation_window_size**2 ).reshape((self.observation_window_size,self.observation_window_size) ),
+                    np.zeros( int(self.observation_window_size/2)**2 ).reshape(
+                        ( int(self.observation_window_size/2), int(self.observation_window_size/2) )
+                        ),
                     axis = 0 
                 ),
                 axis = 0 )
@@ -217,6 +243,9 @@ class CityMap(gym.Env):
         )
         
         current_frame = rough_cut_rotated.crop(bounding_box_current_frame)
+        
+        # Scaling down the image to half the dimensions for optimising memory and simplifying input to agent
+        current_frame = current_frame.resize((int(self.observation_window_size/2), int(self.observation_window_size/2)) )
 
         return np.expand_dims( np.expand_dims( np.asarray(current_frame)/255, axis = 0 ), axis = 0 )
     
@@ -239,7 +268,7 @@ class CityMap(gym.Env):
 
 
     def render(self, mode='human', close=False):
-        self.viewer = rendering.SimpleImageViewer()
+        #self.viewer = rendering.SimpleImageViewer()
         #Build image of map with goal and car overlaid
         
         #Create a copy of the map
@@ -270,7 +299,7 @@ class CityMap(gym.Env):
         del(car_size_x)
         del(car_size_y)        
         
-        current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
+        #current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
         
         if mode == 'rgb_array':
             # return np.asarray(current_frame)

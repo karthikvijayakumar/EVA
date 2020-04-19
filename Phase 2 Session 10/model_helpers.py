@@ -47,6 +47,7 @@ class ReplayBuffer(object):
 def evaluate_policy(policy, env, eval_episodes=3):
   avg_reward = 0.
   for _ in range(eval_episodes):
+    
     obs = env.reset()
     # print("Observatin shape from evaluate policy")
     # print(type(obs))
