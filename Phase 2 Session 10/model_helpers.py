@@ -29,31 +29,15 @@ class ReplayBuffer(object):
 
   def sample(self, batch_size):
     sample_tuples = random.sample(self.storage, batch_size)
-    batch_states, batch_next_states, batch_actions, batch_rewards, batch_dones = tuple(zip(*sample_tuples))
-    return np.array(batch_states), batch_next_states, batch_actions, batch_rewards, batch_dones
-    
-    # ind = np.random.randint(0, len(self.storage), size=batch_size)
-    # batch_states, batch_next_states, batch_actions, batch_rewards, batch_dones = [], [], [], [], []
-    # for i in ind: 
-    #   state, next_state, action, reward, done = self.storage[i]
-    #   batch_states.append(np.array(state, copy=False))
-    #   batch_next_states.append(np.array(next_state, copy=False))
-    #   batch_actions.append(np.array(action, copy=False))
-    #   batch_rewards.append(np.array(reward, copy=False))
-    #   batch_dones.append(np.array(done, copy=False))
-    # return np.array(batch_states), np.array(batch_next_states), np.array(batch_actions), np.array(batch_rewards), np.array(batch_dones)
+    batch_screen, batch_orientation, batch_dist_goal, batch_next_screen, batch_next_orientation, batch_next_dist_goal, batch_actions, batch_rewards, batch_dones = tuple(zip(*sample_tuples))
 
+    return batch_screen, batch_orientation, batch_dist_goal, batch_next_screen, batch_next_orientation, batch_next_dist_goal, batch_actions, batch_rewards, batch_dones
 
 def evaluate_policy(policy, env, eval_episodes=3):
   avg_reward = 0.
   for _ in range(eval_episodes):
-    
     obs = env.reset()
-    # print("Observatin shape from evaluate policy")
-    # print(type(obs))
-    # print(obs.shape)
     done = False
-    # print("Entering while loop")
     while not done:
       action = policy.select_action(obs)
       obs, reward, done, _ = env.step(action)

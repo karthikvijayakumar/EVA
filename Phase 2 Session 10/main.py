@@ -28,8 +28,6 @@ def mkdir(base, name):
         os.makedirs(path)
     return path
 
-
-
 # Selecting the device (CPU or GPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -73,9 +71,6 @@ work_dir = mkdir('exp', 'brs')
 monitor_dir = mkdir(work_dir, 'monitor')
 
 env = CityMap(citymap, roadmask, car_image_resized)
-# env = wrappers.Monitor(env, monitor_dir, force = True, video_callable=lambda episode_id: True)
-# env._max_episode_steps = 200
-# print(env.reset())
 
 # Set seeds and get get info to initiate classes
 env.seed(seed)
@@ -93,7 +88,6 @@ replay_buffer = ReplayBuffer()
 
 #List for storing model evaluations
 evaluations = [evaluate_policy(policy, env)]
-# evaluations = [1]
 evaluation_timesteps = [0]
 
 #Initialise variables
@@ -105,21 +99,16 @@ done = True
 t0 = time.time()
 
 #Training
-max_timesteps = 50000
-# We start the main loop over 500,000 timesteps
+
+# We start the main loop over max_timestep timesteps
 while total_timesteps < max_timesteps:
   
-  # print("Timesteps - total: " + str(total_timesteps) + "; done: " + str(done) ) 
   # If the episode is done
   if done:
 
-    # Complete the recording
-    # env.stats_recorder.save_complete()
-    # env.stats_recorder.done = True
-
     # If we are not at the very beginning, we start the training process of the model
     if total_timesteps != 0:
-      print("Total Timesteps: {} Episode Num: {} Episode length: {} Reward: {}".format(total_timesteps, episode_num, episode_timesteps, episode_reward))
+      print("\n\nTotal Timesteps: {} Episode Num: {} Episode length: {} Reward: {}".format(total_timesteps, episode_num, episode_timesteps, episode_reward))
       policy.train(replay_buffer, episode_timesteps, batch_size, discount, tau, policy_noise, noise_clip, policy_freq)
 
     # We evaluate the episode and we save the policy
@@ -131,7 +120,7 @@ while total_timesteps < max_timesteps:
       np.save("./results/%s" % (file_name), evaluations)
     
     # When the training step is done, we reset the state of the environment
-    obs = env.reset()
+    screen, orientation, dist_goal = env.reset()
     
     # Set the Done to False
     done = False
@@ -141,42 +130,38 @@ while total_timesteps < max_timesteps:
     episode_timesteps = 0
     episode_num += 1
   
-  # Before 10000 timesteps, we play random actions
+  # Before start_timesteps timesteps, we play random actions
   if total_timesteps < start_timesteps:
     action = env.action_space.sample()[0]
   else: # After 10000 timesteps, we switch to the model
-    action = policy.select_action(obs)
+    action = policy.select_action((screen, orientation, dist_goal))
     # If the explore_noise parameter is not 0, we add noise to the action and we clip it
     if expl_noise != 0:
       action = np.clip( (action + np.random.normal(0, expl_noise)), env.action_space.low, env.action_space.high)[0]
+      # np.clip returns an array. We need a scalar. Hence taking the first element
   
   # The agent performs the action in the environment, then reaches the next state and receives the reward
-  new_obs, reward, done, _ = env.step(action)
+  (new_screen, new_orientation, new_dist_goal), reward, done, _ = env.step(action)
 
   # We check if the episode is done
   done_bool = 1 if episode_timesteps + 1 == env.max_episode_steps else float(done)
   done = bool(done_bool)
 
-  # if(episode_timesteps == 199):
-  #   print("Reached 199 episode length")
-  #   print("done: "  +str(done))
-
   # We increase the total reward
   episode_reward += reward
   
   # We store the new transition into the Experience Replay memory (ReplayBuffer)
-  replay_buffer.add((obs, new_obs, action, reward, done_bool))
+  replay_buffer.add((screen, orientation, dist_goal, new_screen, new_orientation, new_dist_goal, action, reward, done_bool))
 
   # We update the state, the episode timestep, the total timesteps, and the timesteps since the evaluation of the policy
-  obs = new_obs
+  screen = new_screen
+  orientation = new_orientation
+  dist_goal = new_dist_goal
   episode_timesteps += 1
   total_timesteps += 1
   timesteps_since_eval += 1
 
 env.close()
-# Complete the recording
-# env.stats_recorder.save_complete()
-# env.stats_recorder.done = True
 
 # We add the last policy evaluation to our list of evaluations and we save our model
 evaluations.append(evaluate_policy(policy, env))

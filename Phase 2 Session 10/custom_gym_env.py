@@ -17,7 +17,7 @@ class CityMap(gym.Env):
     # observation_window_size is the side length of the square surrounding the car
     # The car would see (observation_window_size/2) ahead and behind and (observation_window_size/2) to the left and right
     
-    max_action = 1
+    max_action = np.float64(1.0)
 
     max_turn_radians = np.pi/36.0
     # pi/6 radians = 180/36 = 5 degrees
@@ -31,7 +31,7 @@ class CityMap(gym.Env):
     #Max steps before we call the episode done
     max_episode_steps = 2500
     
-    def __init__(self, citymap, roadmask, car_image):
+    def __init__(self, citymap, roadmask, car_image, render_pov = 'map'):
         self.action_space = spaces.Box(low = np.float64(-self.max_action), high = np.float64(self.max_action), shape = (1,) ) 
         # Action space is how many degrees to turn the car in radians
         
@@ -43,6 +43,7 @@ class CityMap(gym.Env):
         self.citymap = citymap.copy()
         self.roadmask = roadmask.copy()
         self.car_image = car_image.copy()
+        self.render_pov = render_pov
         
         #Find size of the roadmask for reference later
         self.roadmask_size_x, self.roadmask_size_y = self.roadmask.getbbox()[2:4]
@@ -77,13 +78,13 @@ class CityMap(gym.Env):
         assert ((type(action) == np.float32) | (type(action) == np.float64)), "Input type should be a float32 or float64"
         
         # Things to compute
-        # 1. Next position 
-        # 2. Orientation of car towards goal
-        # 3. Combine Screen grab from next position and orientation to produce the next state
-        # 5. Reward on moving to next position
-        # 6. Update number of steps taken
-        # 7. Is the episode done
-        # 8. Any info to pass on to the agent     
+        # 1. Next position         
+        # 2. Reward on moving to next position
+        # 3. Orientation of car towards goal
+        # 4. Combine Screen grab from next position and orientation to produce the next state
+        # 5. Update number of steps taken
+        # 6. Is the episode done        
+        # 7. Any info to pass on to the agent
 
         # 1. Next position
         # From (pos_x, pos_y) we move forward with 'speed' steps in the direction 'angle+action*max_turn_radians'
@@ -103,34 +104,21 @@ class CityMap(gym.Env):
         # Displacement y is negative since the top of the frame is y=0
         # Hence if the car is pointing upwards ( oriented at 0 degrees ) then the y values would decrease
         
+        old_car_pos_x = self.car_pos_x
+        old_car_pos_y = self.car_pos_y
+
         self.car_pos_x = self.car_pos_x + displacement_x
         self.car_pos_y = self.car_pos_y + displacement_y
         
         # Clip position to boundaries of the image
-        self.car_pos_x = np.clip(self.car_pos_x, 0, self.roadmask_size_x-1) 
+        self.car_pos_x = np.clip(self.car_pos_x, 0, self.roadmask_size_x-1)
         self.car_pos_y = np.clip(self.car_pos_y, 0, self.roadmask_size_y-1)
         
-        # 3. orientation towards goal ( Next state )
-        # Definition of orientation:
-        # With respect to the axes of car ( car's forward pointing upwards ), at how many degrees is the goal
-        # We compute this in two steps:
-        # Step 3.a: At what angle is the goal with respect to the vertical
-        # Angle of goal wrt horizontal is tan_inverse( distance in y axis / distance in x axis )
-        # Angle of goal wrt vertical is 90 + the above = 90 + tan_inverse( distance in y axis / distance in x axis )        
-        # Step 3.b: Subtract the angle of the car from the above quantity to get angle relative to the car axes
-        # Angle of goal wrt car = 90 + tan_inverse( distance in y axis / distance in x axis ) - car angle wrt vertical
-        
-        orientation = np.pi/2.0 + np.arctan2( self.goal_y - self.car_pos_y, self.goal_x - self.car_pos_x ) - self.car_angle      
-
-        # 2. Screen grab from next position        
-        next_state = self._extract_current_frame()
-        
-        # 3. Reward on moving to next position
+        # 2. Reward on moving to next position
         
         new_distance_from_goal = np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 )
         
         pixel_value_at_car_pos = self.roadmask.getpixel((self.car_pos_x, self.car_pos_y))
-#         assert pixel_value_at_car_pos in [0,1], "Pixel values are not exactly 0 or 1")
         
         if( pixel_value_at_car_pos == 1 ):
             #Currently on sand
@@ -144,7 +132,6 @@ class CityMap(gym.Env):
             reward = -100
         else:
             # new_distance_from_goal < self.distance_from_goal
-            # reward = 0.1
             reward = 0.2 * ((1650-new_distance_from_goal)/1650)
 
         # Change reward on termination conditions
@@ -155,19 +142,48 @@ class CityMap(gym.Env):
         elif( self.num_steps == self.max_episode_steps ):
             # Give high -ve reward when the num steps has crossed max steps
             reward = -1000
-               
+        elif(
+            ( (old_car_pos_x-self.car_pos_x) == 0 and (self.car_pos_x == 0 or self.car_pos_x >= self.roadmask_size_x-1) ) or 
+            ( (old_car_pos_y-self.car_pos_y) == 0 and (self.car_pos_y == 0 or self.car_pos_y >= self.roadmask_size_y-1) ) 
+            ):
+            # Give high -ve reward when hitting a wall
+            reward = -1000
+
         self.distance_from_goal = new_distance_from_goal
-        
-        # 4. Update number of steps taken
+
+        # 3. Compute orientation of car towards goal        
+
+        # 4. Combine screen grab from current position with orientation and distance to goal to form next state
+        next_state = ( self._extract_current_frame(), self._compute_orientation_towards_goal() , new_distance_from_goal )
+
+        # 5. Update number of steps taken
         self.num_steps += 1
         
-        # 5. Is the episode done?
+        # 6. Is the episode done?
         
-        if( new_distance_from_goal < self.distance_threshold_done  or self.num_steps == self.max_episode_steps ):
+        if( 
+            new_distance_from_goal < self.distance_threshold_done  or 
+            self.num_steps == self.max_episode_steps or
+            ( old_car_pos_x-self.car_pos_x == 0 and old_car_pos_y - self.car_pos_y == 0)
+            ):
             # Either we have reached the target position or we have exceed the max steps for this episode
             done = 1
             self.reset()
-            next_state = np.expand_dims( 
+            next_state = (self._zero_screen_grab(),0,0)
+            # Return a zero screen grab, zero orientation and zero distance in case of termination
+            
+        else:
+            done = 0
+
+        # 7. Any info to pass on to the agent
+       
+        return next_state, reward, done, {}
+
+    """
+        Zero screen grab for episode termination conditions
+    """
+    def _zero_screen_grab(self):
+        screen_grab = np.expand_dims( 
                 np.expand_dims( 
                     np.zeros( int(self.observation_window_size/2)**2 ).reshape(
                         ( int(self.observation_window_size/2), int(self.observation_window_size/2) )
@@ -175,39 +191,41 @@ class CityMap(gym.Env):
                     axis = 0 
                 ),
                 axis = 0 )
-        else:
-            done = 0
+        return screen_grab
 
-        # 6. Any info to pass on to the agent
+    """
+        Definition of orientation:
+            With respect to the axes of car ( car's forward pointing upwards ), at how many degrees is the goal
 
-        # print(
-        #     "x: "+ str(self.car_pos_x.round(0)) + 
-        #     "; y: " + str(self.car_pos_y.round(0)) + 
-        #     "; angle(deg): " + str(np.round(self.car_angle*180/np.pi),2) + 
-        #     "; action: " + str(np.round(action*180/np.pi,2)) +
-        #     "; reward: " + str(reward)
-        #     )
-        
-        return next_state, reward, done, {}
+        We compute this in two steps:
+        Step 1: At what angle is the goal with respect to the vertical
+            Angle of goal wrt horizontal is tan_inverse( distance in y axis / distance in x axis )
+            Angle of goal wrt vertical is 90 + the above = 90 + tan_inverse( distance in y axis / distance in x axis )        
+        Step 2: Subtract the angle of the car from the above quantity to get angle relative to the car axes
+            Angle of goal wrt car = 90 + tan_inverse( distance in y axis / distance in x axis ) - car angle wrt vertical
+    """
+    def _compute_orientation_towards_goal(self):
+        orientation = np.pi/2.0 + np.arctan2( self.goal_y - self.car_pos_y, self.goal_x - self.car_pos_x ) - self.car_angle
+        return orientation
+    
+    """
+        Simple euclidean distance computation
+        Abstracted to a function to avoid rewriting in multiple places
+    """
+    def _compute_distance_from_goal(self):
+        return np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 ) 
 
     """
         Extracts the frame that the agent/car currently sees
         With respect to the frame extracted the car is always pointing upward
         Keeping the orientation fixed is key since else for the same scene( screen grab ), the car can be in different orientations 
         and hence should take different actions
-        
-        For example take the following case 
-            Environment: A single straight road with the car in the middle on the road
-            Goal: Left end of the road and outside the visibility of the agent
-        
-            The car can be oriented left or right and the goal can be to the left or right
-            <<< NEED TO THINK OF A BETTER EXAMPLE >>>
-            
+           
         Parameters:
             None
         
         Returns:
-            img - Numpy array of shape ( observation_window_size, observation_window_size )
+            img - Numpy array of shape ( observation_window_size/2, observation_window_size/2 )
     """
     def _extract_current_frame(self):
         # We know the current position of the car
@@ -220,7 +238,6 @@ class CityMap(gym.Env):
         # We need to use the padded version of the road mask here
         # Hence we add self.padding_size to the x,y position of the car
         bounding_box_rough_cut = ( self.car_pos_x, self.car_pos_y, self.car_pos_x+(2*self.padding_size), self.car_pos_y+(2*self.padding_size) )
-        # print("Bounding box of rough cut: " +str(bounding_box_rough_cut))
 
         rough_cut = self.roadmaskpadded.crop(bounding_box_rough_cut)
         
@@ -259,16 +276,15 @@ class CityMap(gym.Env):
         # Angle measures rotation from vertical axis (i.e angle = 0 when car is heading upwards in the map)
         
         #Distance from goal
-        self.distance_from_goal = np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 )
+        self.distance_from_goal = self._compute_distance_from_goal()
 
         #Set num_steps to 0
         self.num_steps = 0
         
-        return self._extract_current_frame()
+        return (self._extract_current_frame(), self._compute_orientation_towards_goal(), self.distance_from_goal )
 
 
-    def render(self, mode='human', close=False):
-        #self.viewer = rendering.SimpleImageViewer()
+    def render(self, mode='human', close=False):        
         #Build image of map with goal and car overlaid
         
         #Create a copy of the map
@@ -297,23 +313,14 @@ class CityMap(gym.Env):
         map_copy.paste( car_image_copy, box = ( int(self.car_pos_x - (car_size_x/2)), int(self.car_pos_y - (car_size_y/2)) ) )
         del(car_image_copy)
         del(car_size_x)
-        del(car_size_y)        
-        
-        #current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
-        
+        del(car_size_y)       
+                
         if mode == 'rgb_array':
-            # return np.asarray(current_frame)
-            return np.asarray(map_copy)
-#         elif mode == 'human':
-#             if self.viewer is None:
-#                 self.viewer = rendering.SimpleImageViewer()
-# #             self.viewer.imshow(np.asarray(current_frame)*255)
-#             self.viewer.imshow(np.asarray(map_copy))
-#             return self.viewer.isopen
+            if(self.render_pov == 'map'):            
+                return np.asarray(map_copy)
+            elif(self.render_pov == 'car'):
+                current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
+                return np.asarray(current_frame)
     
     def close(self):
         pass
-        # if self.viewer is not None:
-        #     self.viewer.close()
-        #     print(self.viewer.isopen)
-        #     self.viewer = None
