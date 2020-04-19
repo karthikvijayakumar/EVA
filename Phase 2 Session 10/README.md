@@ -132,11 +132,11 @@ The one caveat here is that the car can be at an angle( with respect to the vert
 
 Say car position is x,y and is at angle theta wrt to the vertical, then what we want is the following crop
 
-![Diagram 1](/images/diagram_1.png)
+![Diagram 1](/Phase%202%20Session%2010/images/diagram_1.png)
 
 We cant however get a rotated crop, hence we take a larger square crop without rotation first, rotate the crop and then crop it further to the size required
 
-![Diagram 2](/images/diagram_2.png)
+![Diagram 2](/Phase%202%20Session%2010/images/diagram_2.png)
 
 Lets call the larger square crop "rough cut". Rough cut is largest when the car is at an angle of 45 degrees to the vertical. To simplify code and calculation we take the largest rough cut that can accommodate all angles of the car.
 
@@ -144,7 +144,7 @@ What is the max size of "rough cut"?
 
 Say the car is at 45 degrees ( theta = 45 ) then the side of the rough cut square is d*sqrt(2)
 
-![Diagram 3](/images/diagram_3.jpg)
+![Diagram 3](/Phase%202%20Session%2010/images/diagram_3.jpg)
 
 However the rough cut can go outside the bounds of the image itself. Hence we pad the image with d/sqrt(2) pixels of white on all sides. We maintain this padded image for calculation purposes in the environment object.
 
@@ -158,9 +158,9 @@ I will write up the exact math in this doc at a later point of time.
 2. Rotate the rough cut by the car angle - This ensures what the car sees is towards the top of the image
 3. Crop a square of side length d around the center
 
-![Diagram 4](/images/diagram_4.jpg)
+![Diagram 4](/Phase%202%20Session%2010/images/diagram_4.jpg)
 
-![Diagram 5](/images/diagram_5.jpg)
+![Diagram 5](/Phase%202%20Session%2010/images/diagram_5.jpg)
 
 ### Orientation of the goal wrt to the car
 
@@ -173,7 +173,7 @@ theta is the angle of the car wrt to the vertical
 
 Hence psi+90-theta is the angle of the goal wrt to the axes of the car
 
-![Diagram 6](/images/diagram_6.jpg)
+![Diagram 6](/Phase%202%20Session%2010/images/diagram_6.jpg)
 
 ### Distance to the goal
 
@@ -195,7 +195,7 @@ Note: Since I use radians the max angle of turn would be pi/36 radians ( pi radi
 
 Using the following architecture
 
-![Network architecture](/images/network_architecture.png)
+![Network architecture](/Phase%202%20Session%2010/images/network_architecture.png)
 
 [Source](https://fomoro.com/research/article/receptive-field-calculator#3,2,1,VALID;3,2,1,VALID;3,2,1,VALID;3,2,1,VALID)
 
