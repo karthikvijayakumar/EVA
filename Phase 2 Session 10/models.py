@@ -1,3 +1,16 @@
+# 
+# README
+# 
+# The TD3 implementation below heavily derives from OpenAI's spinning up [ https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/td3 ]
+# As of now I have decided to entirely do away with all convolutional layers
+# In Atari or other envs the image passed to the agent is not binary in nature
+# And requires feature extraction and simplification to a point it can be used for classification etc.
+# In our case the roadmask is already binary in nature and doesnt really require further processing
+# A simple average pooling of the screen grab returned by the agent tells us in 
+# which sections the road is and where it is not. This information is enough for the agent to learn.
+# Potentially with some convolutions it can learn to identify horizontal and vertical lines
+# Given the agent learns without them I dont see the need as of now
+
 import os
 import time
 import random

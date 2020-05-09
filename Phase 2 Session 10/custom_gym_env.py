@@ -62,9 +62,7 @@ class CityMap(gym.Env):
         
         #Set goal point
         self.goal_x = 1154
-        self.goal_y = 158
-        # self.goal_x = 408
-        # self.goal_y = 144
+        self.goal_y = 158        
         
         self.car_pos_x = 0
         self.car_pos_y = 0
@@ -142,12 +140,11 @@ class CityMap(gym.Env):
         self.car_pos_y = np.clip(self.car_pos_y, 0, self.roadmask_size_y-1)
         
         # 2. Reward on moving to next position
-        # Reward is computed as a sum of different components
-        # Component 1: Living penalty
-        # Component 2: If the car is in sand or not
-        # Component 3: Distance covered towards the goal
-        # Component 4: Termination conditions - Reached the goal / Not moving
-        # Component 5: Cost of turning
+        # Reward is computed based on a nested if-else condition
+        # If on sand there are 2 cases:
+        # a. On the boundary of the map and hitting into the wall -> Incentivize large turns to get out of the wall
+        # b. Not on the boundary -> Incentivize movement towards the goal
+        # If on road incentivize movement towards the goal        
         
         new_distance_from_goal = np.sqrt( (self.car_pos_x - self.goal_x)**2 + (self.car_pos_y - self.goal_y)**2 )
         
@@ -176,29 +173,10 @@ class CityMap(gym.Env):
                 reward = 0.3
         assert reward <= 1, "Reward for a single step pre-termination bonus is greater than 1. Reward : " +str(reward)
         
-        #Component 1: Living penalty
-        # reward -= 1
-
-        # Component 2
-        # reward += 0.5 if( pixel_value_at_car_pos == 0 ) else 2
-        #Currently on sand
-        # reward += -1
-        #reward = -1 * ((new_distance_from_goal)/self.road_mask_diagonal) # 1650 is the length of the diagonal of the image
-
-        # Component 3
-        # reward +=  1 if ( self.distance_from_goal - new_distance_from_goal > 0 ) else -0.5
-
-        # reward = -0.2 * (new_distance_from_goal/self.road_mask_diagonal)
-        # reward = 0.2 * (1 - (new_distance_from_goal/self.road_mask_diagonal) )
-        
         # Component 4: Reward on termination conditions
         if( new_distance_from_goal < self.distance_threshold_done ):
             # Give high +ve reward when it has reached the goal
             reward += 50
-        # elif( self.num_steps == self.max_episode_steps ):
-            # Give high -ve reward when the num steps has crossed max steps
-            # pass
-            # reward = -1000
         elif(
             old_car_pos_x-self.car_pos_x == 0 and old_car_pos_y-self.car_pos_y == 0 or
             ( (old_car_pos_x-self.car_pos_x) == 0 and (self.car_pos_x == 0 or self.car_pos_x >= self.roadmask_size_x-1) ) or 
@@ -206,9 +184,6 @@ class CityMap(gym.Env):
             ):
             # Give high -ve reward when hitting a wall or moving into a corner
             reward -= 20
-
-        # Component 5: Add cost of turning action*max_radians
-        # reward += (-1)*np.abs(action)*0.1
 
         # 3. Update number of steps taken
         self.num_steps += 1
@@ -299,7 +274,6 @@ class CityMap(gym.Env):
     """
     def _compute_orientation_towards_goal(self):
         orientation = np.arctan2( self.goal_x - self.car_pos_x, self.car_pos_y - self.goal_y ) - self.car_angle
-        # orientation = np.pi/2.0 + np.arctan2( self.goal_y - self.car_pos_y, self.goal_x - self.car_pos_x ) - self.car_angle
 
         if(orientation >= np.pi):
             orientation = orientation - (2*np.pi)
@@ -332,7 +306,8 @@ class CityMap(gym.Env):
         # Step 1: Extract a square of size observation_window_size*sqrt(2) surrounding the car ( Call this rough cut )
         # Step 2: Rotate the rough cut image around the center by angle of the car
         # Step 3: Extract a square of size observation_window_size around the center
-        
+        # Step 4: Extract a square of what is in front of the car
+        # Step 5: Sacling down the image to the required size
         
         # Step 1: Extract a square of size observation_window_size*sqrt(2) surrounding the car ( Call this rough cut )
         # We need to use the padded version of the road mask here
@@ -373,7 +348,9 @@ class CityMap(gym.Env):
         
         # Scaling down the image to half the dimensions for optimising memory and simplifying input to agent
         forward_view = forward_view.resize((self.state_image_size,self.state_image_size), resample = Image.NEAREST )
-        # current_frame = current_frame.resize((int(self.observation_window_size/8), int(self.observation_window_size/8)), resample = Image.NEAREST )
+        # In the current setting self.image_size is set to 20 and forward_view was already a 20x20 image
+        # Hence this operation does not do anything.
+        # If one increase the observation window size then this resizing would be useful
 
         return np.expand_dims( np.expand_dims( np.asarray(forward_view)/255, axis = 0 ), axis = 0 )
     

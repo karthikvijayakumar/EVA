@@ -18,7 +18,7 @@ There are 3 things at a high level:
         Defines the replay buffer to store and sample experiences from and the policy evaluation function
     4. main.py
 
-        Main script that runs the training
+        Main script that runs the training and inference
 
         Just run 
 
@@ -157,10 +157,16 @@ I will write up the exact math in this doc at a later point of time.
 1. Obtain rough cut - Square of side length d*sqrt(2) centered around the car
 2. Rotate the rough cut by the car angle - This ensures what the car sees is towards the top of the image
 3. Crop a square of side length d around the center
+4. Crop a square of side length d/2 in the upper middle - This is what would be in front of the car
 
+Step 1
 ![Diagram 4](/Phase%202%20Session%2010/images/diagram_4.jpg)
 
+Step 2 and 3
 ![Diagram 5](/Phase%202%20Session%2010/images/diagram_5.jpg)
+
+Step 4
+![Diagram 5_2](/Phase%202%20Session%2010/images/diagram_5_2.jpg)
 
 ### Orientation of the goal wrt to the car
 
@@ -193,15 +199,13 @@ Note: Since I use radians the max angle of turn would be pi/36 radians ( pi radi
 
 ## Network architecture
 
-Using the following architecture
+- I have used a simple average pooling layer for the image
+- We obtain a 20x20 image from the environment. Average pooling with a 4x4 kernel with stride 4 gives us 25 values
+- Flatten the output from the avg pooling and combine with orientation and distance to goal
+- Pass these values through a FC network with 2 layers and one output layer
 
-![Network architecture](/Phase%202%20Session%2010/images/network_architecture.png)
-
-[Source](https://fomoro.com/research/article/receptive-field-calculator#3,2,1,VALID;3,2,1,VALID;3,2,1,VALID;3,2,1,VALID)
-
-I chose the above network to keep the parameters less than 10k.
-
-However, I believe this is too shallow a network to learn the task at hand. Have to try a deeper network with more channels
+Currently the network seems to use a large number of parameters for what seems to be a simple task.
+In the future I plan to experiment with smaller networks
 
 # Training and inference process
 
@@ -209,4 +213,19 @@ After every call to the train function in the T3D class, I print out how much th
 
 In the inference process I create two sets of videos with different point of view of recording. One records the whole map with the car overlayed on it, the second records what the car sees ( only the screen capture part, orientation and distance are not rendered )
 
-I noticed during the training that after 63k steps the weights were not getting updated. Also the reward per episode was not improving either. I believe this is because the network capacity isn't enough to capture the task at hand.
+There are 2 things to note during the training process:
+
+1. Epsilon greedy
+    To increase the exploration done by the agent I implemented epsilon greedy
+    In the training loop the agent uses random actions for the first 10k iterations
+    Post that it uses epsilon greedy to randomly choose actions with epsilon probability
+    epsilon starts out at 1 after 10k timesteps and eventually converges to 0.05 ( 5% )
+    
+    The graph of epsilon over timesteps is below
+    ![Diagram epsilon greedy](/Phase%202%20Session%2010/images/diagram_epsilon_greedy.png)
+
+2. LR scheduler
+    I noticed that the change to the networks was of constant magnitude after a while
+    I believe this is because the optimiser is moving back and forth around a minima
+    Taking cue from this I put in a LR scheduler to drop the LR by half after every certain number of iterations
+    The halving point is 5k for the critic and 2.5k for the actor. Both their LRs get halved at the same time
