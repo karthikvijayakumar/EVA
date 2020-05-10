@@ -27,10 +27,10 @@ def mkdir(base, name):
     return path
 
 # Setup gym environment
-citymap = Image.open("MASK1.png")
-roadmask = Image.open("MASK1.png").convert('1').convert('L')
+citymap = Image.open("images/citymap.png")
+roadmask = Image.open("images/MASK1.png").convert('1').convert('L')
 # Converting to binary and back to grayscale to ensure there are only full black and white pixels
-car_image = Image.open("car_upright.png")
+car_image = Image.open("images/car_upright.png")
 car_image_width, car_image_height = car_image.getbbox()[2:4]
 car_image_resized = car_image.resize( (int(car_image_width/2), int(car_image_height/2)) )
 

@@ -33,6 +33,9 @@ class CityMap(gym.Env):
 
     #State image size
     state_image_size = 20
+
+    #Goal set
+    goals = [ (726,546), (1154,158), (360,350) ] 
     
     def __init__(self, citymap, roadmask, car_image, render_pov = 'map'):
         self.action_space = spaces.Box(low = np.float64(-self.max_action), high = np.float64(self.max_action), shape = (1,) ) 
@@ -60,9 +63,15 @@ class CityMap(gym.Env):
         padding = ( self.padding_size, self.padding_size, self.padding_size, self.padding_size )
         self.roadmaskpadded = ImageOps.expand( self.roadmask, padding, fill = 0 ) # Pad and fill with sand
         
+        #Randomly permute the goal set for this episode
+        rng = np.random.default_rng()
+        self.episode_goal_order = rng.permutation(self.goals)
+        
+        #Choose the first element of the list as the starting goal
+        self.curr_goal_index = 0
+
         #Set goal point
-        self.goal_x = 1154
-        self.goal_y = 158        
+        self.goal_x, self.goal_y = self.episode_goal_order[self.curr_goal_index]
         
         self.car_pos_x = 0
         self.car_pos_y = 0
@@ -106,9 +115,10 @@ class CityMap(gym.Env):
         # 2. Reward on moving to next position
         # 3. Update number of steps taken
         # 4. Update steps_split
-        # 5. Combine Screen grab from next position and orientation to produce the next state
+        # 5. Has the current goal been reached? If yes shift to the next goal
         # 6. Is the episode done?
         # 7. Any info to pass on to the agent
+        # 8. Combine Screen grab from next position and orientation to produce the next state
 
         # 1. Next position
         # From (pos_x, pos_y) we move forward with 'speed' steps in the direction 'angle+action*max_turn_radians'
@@ -161,7 +171,7 @@ class CityMap(gym.Env):
             ):
                 #Handle boundary cases
                 reward = 0.5*np.abs(action)
-                # Incentivise large turns when at the boundary
+                # Incentivize large turns when at the boundary
             elif(new_distance_from_goal < self.distance_from_goal):
                 #Handle non boundary cases
                 reward = 0.1
@@ -208,44 +218,49 @@ class CityMap(gym.Env):
         
         self.distance_from_goal = new_distance_from_goal
 
-        # 5. Combine screen grab from current position with orientation and distance to goal to form next state
-        next_state = ( self._extract_current_frame(), self._compute_orientation_towards_goal()/np.pi , self.distance_from_goal/self.road_mask_diagonal)
-        # We scale the orientation and distance by their max values to ensure their absolute values dont cross one
+        # 5. Has the current goal been reached? If yes shift to the next goal
+        if( new_distance_from_goal < self.distance_threshold_done and self.curr_goal_index < len(self.episode_goal_order) ):
+            self.curr_goal_index += 1
+            self.goal_x, self.goal_y = self.episode_goal_order[self.curr_goal_index % len(self.episode_goal_order)]
 
-       
         # 6. Is the episode done? and compute info to pass to agent
-        
-        if( 
-            new_distance_from_goal < self.distance_threshold_done  or 
+        #   Two types of terination cases
+        #       1. Happy case ( All goals reached )
+        #       2. Not so happy case ( Max steps or car has hit a boundary and is not moving )
+
+        if( (new_distance_from_goal < self.distance_threshold_done and self.curr_goal_index == len(self.episode_goal_order)) or
             self.num_steps == self.max_episode_steps or
             ( old_car_pos_x-self.car_pos_x == 0 and old_car_pos_y - self.car_pos_y == 0)
             ):
-            # Either we have reached the target position or we have exceed the max steps for this episode or the car is not moving
+            # Either we have exceed the max steps for this episode or the car is not moving
             done = True
-
-            # Info to pass to agent
-            if( new_distance_from_goal < self.distance_threshold_done):
-                info['reached_goal'] = True
-                info['termination_reason'] = 'reached goal'
-            elif( self.num_steps == self.max_episode_steps ):
-                info['reached_goal'] = False
+            if( new_distance_from_goal < self.distance_threshold_done and self.curr_goal_index == len(self.episode_goal_order) ):
+                info['termination_reason'] = 'reached all goals'
+            elif( self.num_steps == self.max_episode_steps ):                
                 info['termination_reason'] = 'max steps'
             elif( old_car_pos_x-self.car_pos_x == 0 and old_car_pos_y - self.car_pos_y == 0 ):
-                info['reached_goal'] = False
                 info['termination_reason'] = 'car not moving'
-            else:
-                info['reached_goal'] = False
-                info['termination_reason'] = 'not terminated'
-
-            # self.reset()
-            next_state = (self._zero_screen_grab(),0,0)
             # Return a zero screen grab, zero orientation and zero distance in case of termination
-            
         else:
             done = False
+            info['termination_reason'] = 'not terminated'
 
         # 7. Any info to pass on to the agent
-        assert done or reward <= 1, "Reward for a non-terminating step is greater than 1. Reward : " +str(reward)
+        info['curr_goal_index'] = self.curr_goal_index
+
+        # 8. Combine screen grab from current position with orientation and distance to goal to form next state
+        # For done states we return a zero screen grab, orientation and distance to goal
+        if(done):
+            next_state = (self._zero_screen_grab(),0,0)
+        else:
+            next_state = ( 
+                self._extract_current_frame(), 
+                self._compute_orientation_towards_goal()/np.pi , 
+                self._compute_distance_from_goal()/self.road_mask_diagonal
+                )
+        # We scale the orientation and distance by their max values to ensure their absolute values dont cross one
+
+        assert new_distance_from_goal<self.distance_threshold_done or reward <= 1, "Reward for a non-terminating step is greater than 1. Reward : " +str(reward)
         return next_state, reward, done, info
 
     """
@@ -381,8 +396,17 @@ class CityMap(gym.Env):
             'sand_towards_goal' : 0,
             'sand_away_goal' : 0
         }
+
+        # Rerandomise the goal order
+        rng = np.random.default_rng()
+        self.episode_goal_order = rng.permutation(self.goals)
         
-        
+        # Reset cur goal index
+        self.curr_goal_index = 0
+
+        #Set goal point
+        self.goal_x, self.goal_y = self.episode_goal_order[self.curr_goal_index]        
+                
         return (self._extract_current_frame(), self._compute_orientation_towards_goal()/np.pi, self.distance_from_goal/self.road_mask_diagonal )
         # We scale the orientation and distance by their max values to ensure their absolute values dont cross one
 
@@ -415,11 +439,14 @@ class CityMap(gym.Env):
         map_copy.paste( car_image_copy, box = ( int(self.car_pos_x - (car_size_x/2)), int(self.car_pos_y - (car_size_y/2)) ) )
         del(car_image_copy)
         del(car_size_x)
-        del(car_size_y)       
+        del(car_size_y)        
                 
         if mode == 'rgb_array':
             if(self.render_pov == 'map'):            
-                return np.asarray(map_copy)
+                return np.asarray(map_copy)[:,:,[2,1,0,3]]
+                # PIL represents images in RGB
+                # Open AI gym seems to use BGR. Hence swapping the R and B channels
+                # The 4th channel is the alpha channel
             elif(self.render_pov == 'car'):
                 current_frame = Image.fromarray( self._extract_current_frame().squeeze(0).squeeze(0)*255 ).convert('RGB')
                 current_frame = current_frame.resize((self.observation_window_size, self.observation_window_size))
