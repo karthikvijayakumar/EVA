@@ -53,11 +53,11 @@ if __name__ == "__main__":
         entry_point= CityMap
     )
     
-    citymap = Image.open("images/simple_map.png")
-    roadmask = Image.open("images/simple_map.png").convert('1').convert('L')
+    citymap = Image.open("images/citymap.png")
+    roadmask = Image.open("images/MASK1.png").convert('1').convert('L')
     car_image = Image.open("images/car_upright.png")
     car_image_width, car_image_height = car_image.getbbox()[2:4]
-    car_image_resized = car_image.resize( (int(car_image_width/2), int(car_image_height/2)) )
+    car_image_resized = car_image.resize( (int(car_image_width/4), int(car_image_height/4)) )
     
     work_dir = mkdir('exp', 'brs')
     monitor_dir = mkdir(work_dir, 'monitor')
